@@ -27,48 +27,62 @@
 
 //////////////////////////////////////////////////////////////////////////////
 
-#define CIFACE(NAME, ...) \
-    typedef struct NAME NAME; \
-    struct BOOST_PP_CAT(ciface_rtti_, NAME) { \
+#define RTTI(NAME) BOOST_PP_CAT(ciface_rtti_, NAME)
+#define CHECK(NAME) BOOST_PP_CAT(ciface_check_, NAME)
+
+#define GET_RTTI(NAME, PTR) \
+    (*(const struct RTTI(NAME) *const *)PTR)
+
+#define RETURNS(TYPE) 0, TYPE
+#define VOID 1, void
+
+#define RTTI_PTR(NAME) const struct RTTI(NAME) *const
+
+#define IFACE(NAME, ...) \
+    struct NAME; \
+    struct RTTI(NAME) { \
         const size_t offset; \
         const struct { \
-            CIFACE_VTABLE(NAME, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__)) \
+            CIFACE_VTABLE(BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__)) \
         } vtable; \
     }; \
-    struct NAME { \
-        const struct BOOST_PP_CAT(ciface_rtti_, NAME) *const _rtti; \
-    }; \
     static inline void \
-    BOOST_PP_CAT(ciface_check_, NAME) (const NAME *const self) { \
+    CHECK(NAME) (const struct NAME *const self) { \
         assert(self); \
-        assert(self->_rtti); \
-        CIFACE_CHECK(NAME, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__)) \
+        const struct RTTI(NAME) *const rtti = GET_RTTI(NAME, self); \
+        assert(rtti); \
+        CIFACE_CHECK(rtti, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__)) \
     } \
     CIFACE_METHODS(NAME, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
 
-#define CIFACE_VTABLE(NAME, METHODS) \
-    BOOST_PP_SEQ_FOR_EACH(CIFACE_VTABLE_EACH, NAME, METHODS)
+#define CIFACE_VTABLE(METHODS) \
+    BOOST_PP_SEQ_FOR_EACH(CIFACE_VTABLE_EACH, ~, METHODS)
 
-#define CIFACE_CHECK(NAME, METHODS) \
-    BOOST_PP_SEQ_FOR_EACH(CIFACE_CHECK_EACH, ~, METHODS)
+#define CIFACE_VTABLE_EACH(R, DATA, METHOD) \
+    RETURN_TYPE(METHOD) (*const SYMBOL(METHOD)) \
+    (ENUM_PARAMS(void *self, METHOD));
 
-#define CIFACE_CHECK_EACH(R, DATA, METHOD) \
-    assert(self->_rtti->vtable.SYMBOL(METHOD));
+#define CIFACE_CHECK(PTR, METHODS) \
+    BOOST_PP_SEQ_FOR_EACH(CIFACE_CHECK_EACH, PTR, METHODS)
+
+#define CIFACE_CHECK_EACH(R, PTR, METHOD) \
+    assert((PTR)->vtable.SYMBOL(METHOD));
 
 #define CIFACE_METHODS(NAME, METHODS) \
     BOOST_PP_SEQ_FOR_EACH(CIFACE_METHOD_EACH, NAME, METHODS)
 
-#define CIFACE_VTABLE_EACH(R, NAME, METHOD) \
-    RETURN_TYPE(METHOD) (*const SYMBOL(METHOD)) \
-    (ENUM_PARAMS(void, METHOD));
-
 #define CIFACE_METHOD_EACH(R, NAME, METHOD) \
-    static inline RETURN_TYPE(METHOD) SYMBOL(METHOD) \
-    (ENUM_PARAMS(const NAME, METHOD)) { \
-        BOOST_PP_CAT(ciface_check_, NAME)(self); \
-        BOOST_PP_IF(IS_VOID(METHOD), BOOST_PP_EMPTY, RETURN_KEYWORD)() \
-            self->_rtti->vtable.SYMBOL(METHOD)(ENUM_ARGS(METHOD)); \
+    static inline RETURN_TYPE(METHOD) \
+    SYMBOL(METHOD) \
+    (ENUM_PARAMS(const struct NAME *const self, METHOD)) { \
+        CHECK(NAME)(self); \
+        TO_RETURN_OR_NOT_TO_RETURN(METHOD) \
+            GET_RTTI(NAME, self)->vtable.SYMBOL(METHOD) \
+                (ENUM_ARGS(self, NAME, METHOD)); \
     }
+
+#define TO_RETURN_OR_NOT_TO_RETURN(METHOD) \
+    BOOST_PP_IF(IS_VOID(METHOD), BOOST_PP_EMPTY, RETURN_KEYWORD)()
 
 #define RETURN_KEYWORD() return
 
@@ -78,42 +92,32 @@
 #define PARAM_LIST(METHOD) \
     BOOST_PP_LIST_REST_N(3, BOOST_PP_TUPLE_TO_LIST(METHOD))
 
-#define ENUM_PARAMS(NAME, METHOD) \
-    NAME *self BOOST_PP_LIST_FOR_EACH(PARAM_EACH, ~, PARAM_LIST(METHOD))
+#define ENUM_PARAMS(SELF, METHOD) \
+    SELF BOOST_PP_LIST_FOR_EACH(PARAM_EACH, ~, PARAM_LIST(METHOD))
 
 #define PARAM_EACH(R, DATA, PARAM) \
     , CIFACE_pair(PARAM)
 
-#define ENUM_ARGS(METHOD) \
-    ((void *)((char *)self - self->_rtti->offset)) \
+#define ENUM_ARGS(SELF, NAME, METHOD) \
+    ((void *)((char *)self - GET_RTTI(NAME, self)->offset)) \
     BOOST_PP_LIST_FOR_EACH(ARG_EACH, ~, PARAM_LIST(METHOD))
 
 #define ARG_EACH(R, DATA, PARAM) \
     , CIFACE_strip(PARAM)
 
-#define RETURNS(TYPE) 0, TYPE
-#define VOID 1, void
-
-#define CIFACE_INIT_FWD(TYPE, IFACE) \
-    CIFACE_INIT_PROTOTYPE(TYPE, IFACE);
-
-#define CIFACE_INIT_PROTOTYPE(TYPE, IFACE) \
-    IFACE \
-    BOOST_PP_CAT(TYPE, BOOST_PP_CAT(_, BOOST_PP_CAT(IFACE, _init))) (void)
-
-#define CIFACE_INIT(TYPE, IFACE, ...) \
-    CIFACE_INIT_PROTOTYPE(TYPE, IFACE) { \
-        static struct BOOST_PP_CAT(ciface_rtti_, IFACE) rtti = { \
+#define INITIAL(TYPE, NAME, IFACE, FUNC, ...) \
+    struct NAME FUNC (void) { \
+        static struct RTTI(NAME) rtti = { \
             .offset = offsetof(TYPE, IFACE), \
             .vtable = { \
                 CIFACE_INIT_VTABLE(BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__)) \
             } \
         }; \
-        IFACE ciface = { \
-            ._rtti = &rtti \
+        struct NAME iface = { \
+            &rtti \
         }; \
-        BOOST_PP_CAT(ciface_check_, IFACE)(&ciface); \
-        return ciface; \
+        CHECK(NAME)(&iface); \
+        return iface; \
     }
 
 #define CIFACE_INIT_VTABLE(METHODS) \
