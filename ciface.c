@@ -11,19 +11,19 @@ IFACE(link,
          * elsewhere, as long as the symbols (link_open, etc.) don't conflict.
          * Virtual functions are described with an n-tuple where n >= 2. The
          * first element of the tuple is the wrapped return type. void
-         * functions must use VOID as their wrapped return type; all others
-         * must use RETURNS(t), where t is their actual return type. The
+         * functions must use (VOID) as their wrapped return type; all others
+         * must use (t), where t is their actual return type. The
          * second element in the tuple is the identifier to use for this
          * virtual function. A short static inline function of that name is
          * defined for you, whose only purpose is to forward control to the
          * implementation function. The rest of the tuple elements, if any,
          * are the virtual function's parameters, in the format (t) i, where
          * t is the parameter's type, and i is the parameter's identifier. */
-        (RETURNS(int), link_open, (char *) address),
-        (RETURNS(int), link_close),
-        (RETURNS(int), link_read, (char *) buf, (size_t) len),
-        (RETURNS(int), link_write, (const char *) buf, (size_t) len),
-        (VOID, link_poke)
+        ((int), link_open, (char *) address),
+        ((int), link_close),
+        ((int), link_read, (char *) buf, (size_t) len),
+        ((int), link_write, (const char *) buf, (size_t) len),
+        ((VOID), link_poke)
       );
 
 struct link {
@@ -40,6 +40,16 @@ struct link {
      * be other interfaces--which you might as well access from the containing
      * type's scope. That seems reasonable enough. */
 };
+
+IFACE_POST(link, _rtti);
+
+static inline struct link link_initial (RTTI_PTR(link) rtti) {
+    struct link l = {
+        ._rtti = rtti
+    };
+
+    return l;
+}
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -185,4 +195,5 @@ static inline int link_close (const struct link *const self) {
     ciface_check_link(rtti);
     return rtti->vtable.link_close(DERIVE(self));
 }
+
 #endif

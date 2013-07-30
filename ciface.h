@@ -6,13 +6,19 @@
 #include <boost/preprocessor/seq/enum.hpp>
 #include <boost/preprocessor/seq/for_each.hpp>
 #include <boost/preprocessor/seq/transform.hpp>
-#include <boost/preprocessor/list/for_each.hpp>
+
 #include <boost/preprocessor/list/rest_n.hpp>
-#include <boost/preprocessor/tuple/to_list.hpp>
+#include <boost/preprocessor/list/for_each.hpp>
+
 #include <boost/preprocessor/tuple/elem.hpp>
+#include <boost/preprocessor/tuple/size.hpp>
+#include <boost/preprocessor/tuple/to_list.hpp>
+
 #include <boost/preprocessor/variadic/to_seq.hpp>
+
 #include <boost/preprocessor/control/if.hpp>
 #include <boost/preprocessor/facilities/empty.hpp>
+#include <boost/preprocessor/arithmetic/dec.hpp>
 
 #include <assert.h>
 #include <stddef.h>
@@ -33,8 +39,7 @@
 #define GET_RTTI(NAME, PTR) \
     (*(const struct RTTI(NAME) *const *)PTR)
 
-#define RETURNS(TYPE) 0, TYPE
-#define VOID 1, void
+#define VOID void,
 
 #define RTTI_PTR(NAME) const struct RTTI(NAME) *const
 
@@ -86,11 +91,11 @@
 
 #define RETURN_KEYWORD() return
 
-#define IS_VOID(METHOD) BOOST_PP_TUPLE_ELEM(0, METHOD)
-#define RETURN_TYPE(METHOD) BOOST_PP_TUPLE_ELEM(1, METHOD)
-#define SYMBOL(METHOD) BOOST_PP_TUPLE_ELEM(2, METHOD)
+#define IS_VOID(METHOD) BOOST_PP_DEC(BOOST_PP_TUPLE_SIZE(BOOST_PP_TUPLE_ELEM(0, METHOD)))
+#define RETURN_TYPE(METHOD) BOOST_PP_TUPLE_ELEM(0, BOOST_PP_TUPLE_ELEM(0, METHOD))
+#define SYMBOL(METHOD) BOOST_PP_TUPLE_ELEM(1, METHOD)
 #define PARAM_LIST(METHOD) \
-    BOOST_PP_LIST_REST_N(3, BOOST_PP_TUPLE_TO_LIST(METHOD))
+    BOOST_PP_LIST_REST_N(2, BOOST_PP_TUPLE_TO_LIST(METHOD))
 
 #define ENUM_PARAMS(SELF, METHOD) \
     SELF BOOST_PP_LIST_FOR_EACH(PARAM_EACH, ~, PARAM_LIST(METHOD))
